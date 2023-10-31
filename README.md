@@ -258,6 +258,12 @@ There are various reasons for this choice, the two most important are:
 
 [MIT](/LICENSE)
 
+## To do
+
+- [ ] Create a unified graphical frontend (GUI) for every operating systems, cpus and architectures, instead of three separate executable scripts with different parameters.
+- [ ] Update the Tclkit dependencies to their latest and greatest versions.
+- [ ] Test KitMaker on more Linux distrubutions at 32 bit (Archlinux32, Debian 12, ...)
+
 &nbsp;
 
 [^1]: If you use KitMaker on any other distribution (not listed directly here), I would love to hear about so this section of the README can be updated.
