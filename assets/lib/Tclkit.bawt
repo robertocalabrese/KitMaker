@@ -1,0 +1,257 @@
+# Copyright: 2016-2023 Paul Obermeier (obermeier@tcl3d.org)
+# Distributed under BSD license.
+#
+# BuildType: MSys / gcc
+#
+# Possible user configuration options (--copt):
+#   Any -DXXX option usable for CFLAGS environment variable.
+#
+# Tclkit is always built in Release mode independent on the BuildType setting.
+
+# This is a modified version of the original 'Tclkit.bawt' by Paul Obermeier.
+# The same license applys for the modifications.
+#
+# Developer:  🆁🅾🅱🅴🆁🆃🅾  🅲🅰🅻🅰🅱🆁🅴🆂🅴
+# City:       🅿🅰🅻🅴🆁🅼🅾, 🆂🅸🅲🅸🅻🆈
+# Country:    🅸🆃🅰🅻🆈
+
+proc _FindTclTkLib { filePrefix } {
+    set fileName [format "%s.a" $filePrefix]
+    if { [file exists $fileName] } {
+        return $fileName
+    }
+    set fileName [format "%ss.a" $filePrefix]
+    if { [file exists $fileName] } {
+        return $fileName
+    }
+    ErrorAppend "Tclkit: No import library with prefix $filePrefix found" "FATAL"
+}
+
+proc Init_Tclkit { libName libVersion } {
+    SetScriptAuthor    $libName "Paul Obermeier" "obermeier@tcl3d.org"
+    SetLibHomepage     $libName "https://sourceforge.net/projects/kbskit/"
+    SetLibDependencies $libName "Tcl" "Tk"
+    SetPlatforms       $libName "All"
+    SetWinCompilers    $libName "gcc"
+}
+
+proc Build_Tclkit { libName libVersion buildDir instDir devDir distDir } {
+    # Enable/disable specific packages for testing purposes.
+    set buildTcl  true
+    set buildTk   true
+    set buildVfs  true
+    set buildVq   true
+    set buildKbs  true
+
+    set buildDirMSys [MSysPath $buildDir]
+    set instDirTclkit $buildDir
+    set instDirMSys  [MSysPath $instDirTclkit]
+
+    set tclDirVersion [GetMajorMinor [GetTclVersion] "."]
+    set tclLibVersion [GetMajorMinor [GetTclVersion]]
+    set tkDirVersion  [GetMajorMinor [GetTkVersion] "."]
+    set tkLibVersion  [GetMajorMinor [GetTkVersion]]
+
+    set kbsBuildDir  [file join $buildDir "kbskit"]
+
+    set tclBuildPath  [file join $buildDir "tcl$tclDirVersion"]
+    set tkBuildPath   [file join $buildDir "tk$tkDirVersion"]
+    set vfsBuildPath  [file join $buildDir "TclVfs"]
+    set vqBuildPath   [file join $buildDir "vqtcl"]
+    set kbsBuildPath  [file join $buildDir "kbskit"]
+
+    set tclBuildPathMSys  [MSysPath $tclBuildPath]
+    set tkBuildPathMSys   [MSysPath $tkBuildPath]
+    set vfsBuildPathMSys  [MSysPath $vfsBuildPath]
+    set vqBuildPathMSys   [MSysPath $vqBuildPath]
+    set kbsBuildPathMSys  [MSysPath $kbsBuildPath]
+
+    set opts ""
+    if { [IsWindows] } {
+        append opts "--build=[GetMingwVersion] "
+    }
+    if { [IsDarwin] } {
+        append opts "--enable-aqua "
+    }
+    if { [Is64Bit] } {
+        append opts "--enable-64bit "
+    }
+    append opts "--disable-symbols "
+
+    if { [UseStage "Extract" $libName] } {
+        # Extract the tclkit software into the tclkit build directory.
+        ExtractLibrary $libName $buildDir
+
+        # Extract corresponding Tcl version into the tclkit build directory.
+        set zipFile [file join [GetInputRootDir] [GetBawtLibInputDir] "Tcl-[GetTclVersion].7z"]
+        Unzip $zipFile $buildDir
+        FileRename [file join $buildDir "Tcl-[GetTclVersion]"] $tclBuildPath
+
+        # Extract corresponding Tk version into the tclkit build directory.
+        set zipFile [file join [GetInputRootDir] [GetBawtLibInputDir] "Tk-[GetTclVersion].7z"]
+        Unzip $zipFile $buildDir
+        FileRename [file join $buildDir "Tk-[GetTclVersion]"] $tkBuildPath
+
+        if { [IsUnix] } {
+            exec chmod -R u+x $tclBuildPath
+            exec chmod -R u+x $tkBuildPath
+        }
+    }
+
+    if { [UseStage "Configure" $libName] } {
+        if { [file exists "[GetTclkitIconFile All]"] } {
+            Log "Using tclkit icon file    : [GetTclkitIconFile All]" 2
+            file copy -force "[GetTclkitIconFile All]" "[file join $kbsBuildDir library tclkit.ico]"
+        } else {
+            Log "Using default tclkit icon file" 2
+        }
+        if { [file exists [GetTclkitResourceFile "All"]] } {
+            Log "Using tclkit resource file: [GetTclkitResourceFile "All"]" 2
+            file copy -force "[GetTclkitResourceFile All]" "[file join $kbsBuildDir win tclkit.rc]"
+        } else {
+            Log "Using default tclkit resource file" 2
+        }
+
+        file mkdir "[file join $instDirTclkit lib]"
+        if { ![file isdirectory "[file join $instDirTclkit lib64]"] } {
+            Log "Create file link          : [file join $instDirTclkit lib64]" 2
+            file link "[file join $instDirTclkit lib64]" "[file join $instDirTclkit lib]"
+        }
+    }
+
+    if { [UseStage "Compile" $libName] } {
+        if { $buildTcl } {
+            # Configure Tcl for static loading.
+            set cmd ""
+            if { [IsWindows] && [Is32Bit] } {
+                append cmd "CFLAGS=-D_USE_32BIT_TIME_T "
+            }
+            if { [IsWindows] } {
+                append cmd "$tclBuildPathMSys/win/configure "
+            } else {
+                append cmd "$tclBuildPathMSys/unix/configure "
+            }
+            append cmd "--prefix=$instDirMSys --exec-prefix=$instDirMSys "
+            append cmd "--disable-shared "
+            append cmd "--disable-zipfs "
+
+            append cmd $opts
+            MSysRun $libName "${libName}_Tcl_Configure" "$tclBuildPath" "$cmd"
+
+            # Compile Tcl for static loading.
+            MSysBuild $libName "$tclBuildPath" "install"
+            MSysBuild $libName "$tclBuildPath" "install-private-headers"
+        }
+
+        if { $buildTk } {
+            set buildTargets [list "Gui" "Dyn"]
+            set buildTypes   [list "--disable-shared" "--enable-shared"]
+
+            set firstRun true
+            foreach target $buildTargets type $buildTypes {
+                set cmd [GetUserCFlags $libName]
+                if { [IsWindows] } {
+                    append cmd "$tkBuildPathMSys/win/configure "
+                } else {
+                    append cmd "$tkBuildPathMSys/unix/configure "
+                }
+                append cmd "--prefix=$instDirMSys --exec-prefix=$instDirMSys "
+                append cmd "$type "
+                append cmd "--disable-zipfs "
+                append cmd "--with-tcl=$tclBuildPathMSys "
+                append cmd $opts
+                MSysRun $libName "${libName}_Tk${target}_Configure" "$tkBuildPath" "$cmd"
+
+                MSysBuild $libName "$tkBuildPath" "install"
+                MSysBuild $libName "$tkBuildPath" "install-private-headers"
+
+                if { $firstRun && [VersionCompare "8.6.10" [GetLibVersion "Tk"]] < 0 } {
+                    # Only Tk versions newer than 8.6.10 need the distclean target
+                    # between building static and dynamic.
+                    MSysBuild $libName "$tkBuildPath" "distclean"
+                    set firstRun false
+                }
+            }
+        }
+
+        if { $buildVfs } {
+            # Configure TclVfs for static loading.
+            set cmd ""
+            append cmd "$vfsBuildPathMSys/configure "
+            append cmd "--prefix=$instDirMSys --exec-prefix=$instDirMSys "
+            append cmd "--disable-shared "
+            append cmd "--with-tcl=$tclBuildPathMSys "
+            append cmd $opts
+            MSysRun $libName "${libName}_TclVfs_Configure" "$vfsBuildPath" "$cmd"
+
+            # Compile TclVfs for static loading.
+            MSysBuild $libName "$vfsBuildPath" "install-binaries"
+        }
+
+        if { $buildVq } {
+            # Configure vqtcl for static loading.
+            set cmd ""
+            append cmd "$vqBuildPathMSys/configure "
+            append cmd "--prefix=$instDirMSys --exec-prefix=$instDirMSys "
+            append cmd "--disable-shared "
+            append cmd "--with-tcl=$tclBuildPathMSys "
+            append cmd $opts
+            MSysRun $libName "${libName}_VqTcl_Configure" "$vqBuildPath" "$cmd"
+
+            # Compile vqtcl for static loading.
+            MSysBuild $libName "$vqBuildPath" "install-binaries"
+        }
+
+        if { $buildKbs } {
+            # Configure kbskit for static loading.
+            set cmd ""
+            append cmd "$kbsBuildPathMSys/configure "
+            append cmd "--prefix=$instDirMSys "
+            append cmd "--exec-prefix=$instDirMSys "
+            append cmd "--disable-shared "
+            append cmd "--with-tcl=$tclBuildPathMSys "
+            append cmd "--with-tk=$tkBuildPathMSys "
+            append cmd $opts
+            MSysRun $libName "${libName}_Kbs_Configure" "$kbsBuildPath" "$cmd"
+
+            # Compile kbskit for static loading.
+            set tclLib     [MSysPath [_FindTclTkLib "[file join $instDirTclkit lib libtcl$tclLibVersion]"]]
+            set tkLib      [MSysPath [_FindTclTkLib "[file join $instDirTclkit lib libtk$tkLibVersion]"]]
+            set tclStubLib [MSysPath [_FindTclTkLib "[file join $instDirTclkit lib libtclstub$tclLibVersion]"]]
+            if { [IsWindows] } {
+                set vfsLib "[file join $instDirMSys lib vfs1.4.1 vfs141.a]"
+                set vqLib  "[file join $instDirMSys lib vqtcl4.1 vqtcl41.a]"
+            } else {
+                set vfsLib "[file join $instDirMSys lib vfs1.4.1 libvfs1.4.1.a]"
+                set vqLib  "[file join $instDirMSys lib vqtcl4.1 libvqtcl4.1.a]"
+            }
+            set cmd ""
+            append cmd "make "
+            set cliOpt "MYCLI=\"$tclLib $vfsLib\" "
+            set guiOpt "MYGUI=\"$tkLib\""
+            set vqOpt  "MYVQ=\"$vqLib $tclStubLib\" "
+            set cliCmd "$cmd $cliOpt $vqOpt all-vq-cli"
+            set guiCmd "$cmd $cliOpt $vqOpt $guiOpt all-vq-gui"
+            MSysRun $libName "${libName}_Cli_Compile" "$kbsBuildPath" "$cliCmd"
+            MSysRun $libName "${libName}_Gui_Compile" "$kbsBuildPath" "$guiCmd"
+        }
+    }
+
+    if { [UseStage "Distribute" $libName] } {
+        StripLibraries "$instDir"
+
+        set tclkitName [string cat "tclkit" $tclDirVersion "-cli" [GetExeSuffix]]
+        SingleFileCopy "[file join $kbsBuildDir kbsvq$tclDirVersion-cli[GetExeSuffix]]"  "[file join $devDir  [GetTclBinDir]]" $tclkitName
+        SingleFileCopy "[file join $kbsBuildDir kbsvq$tclDirVersion-cli[GetExeSuffix]]"  "[file join $distDir [GetTclBinDir]]" $tclkitName
+
+        set tclkitName [string cat "tclkit" $tclDirVersion "-gui" [GetExeSuffix]]
+        SingleFileCopy "[file join $kbsBuildDir kbsvq$tclDirVersion-gui[GetExeSuffix]]"  "[file join $devDir  [GetTclBinDir]]" $tclkitName
+        SingleFileCopy "[file join $kbsBuildDir kbsvq$tclDirVersion-gui[GetExeSuffix]]"  "[file join $distDir [GetTclBinDir]]" $tclkitName
+
+        # Copy and rename sdx.kit.
+        SingleFileCopy [file join $buildDir vqtcl sdx-20110317.kit] "[file join $devDir [GetTclBinDir]]"  "sdx.kit"
+        SingleFileCopy [file join $buildDir vqtcl sdx-20110317.kit] "[file join $distDir [GetTclBinDir]]" "sdx.kit"
+    }
+
+    return true
+}
