@@ -4,3 +4,6 @@ Thumbs.db
 
 # Ignore all the MSYS/MINGW compilers archives.
 assets/windows/gcc*.7z
+
+# Ignore the following folders and their content (recursive).
+build/**
