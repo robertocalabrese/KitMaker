@@ -1,0 +1,40 @@
+# Copyright: 2016-2023 Paul Obermeier (obermeier@tcl3d.org)
+# Distributed under BSD license.
+#
+# BuildType Windows: nmake / vs
+
+proc Init_TclStubs { libName libVersion } {
+    SetScriptAuthor    $libName "Paul Obermeier" "obermeier@tcl3d.org"
+    SetLibHomepage     $libName "http://www.tcl-lang.org/"
+    SetLibDependencies $libName "None"
+    SetPlatforms       $libName "Windows"
+    SetWinCompilers    $libName "vs"
+}
+
+proc Build_TclStubs { libName libVersion buildDir instDir devDir distDir } {
+    if { [UseStage "Extract" $libName] } {
+        ExtractLibrary $libName $buildDir
+        # Do not interpret warnings as errors.
+        ReplaceKeywords "$buildDir/win/rules.vc" [list "-WX" "-WX-"]
+    }
+
+    if { [UseStage "Compile" $libName] } {
+        set opts ""
+        if { [IsDebugBuild] } {
+            append opts "OPTS=symbols,pdbs"
+        }
+        NMakeBuild $libName "$buildDir/win" "makefile.vc" "release" {*}$opts
+        NMakeBuild $libName "$buildDir/win" "makefile.vc" "install" "INSTALLDIR=$instDir" {*}$opts
+    }
+
+    if { [UseStage "Distribute" $libName] } {
+        # Only use the tclstub library.
+        LibFileCopy "$instDir"  "$devDir/[GetTclDir]"   "tclstub*.lib"
+        LibFileCopy "$instDir"  "$distDir/[GetTclDir]"  "tclstub*.lib"
+        if { [IsDebugBuild] } {
+            set tclStub "tclstub[GetMajorMinor $libVersion]"
+            SingleFileCopy "$devDir/[GetTclLibDir]/${tclStub}.lib" "$devDir/[GetTclLibDir]" "${tclStub}g.lib"
+        }
+    }
+    return true
+}

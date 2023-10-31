@@ -1,0 +1,3 @@
+# Note: Dates are expressed as YYYY-MM-DD
+
+2023-10-24  First release of KitMaker (v1.0)

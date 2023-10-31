@@ -1,0 +1,17 @@
+# Developer:  🆁🅾🅱🅴🆁🆃🅾  🅲🅰🅻🅰🅱🆁🅴🆂🅴
+# City:       🅿🅰🅻🅴🆁🅼🅾, 🆂🅸🅲🅸🅻🆈
+# Country:    🅸🆃🅰🅻🆈
+
+# Builds two tclkits, one with Tcl and Tk (tclkit-gui) and one with just Tcl (tclkit-cli).
+# On Windows all libraries can be compiled with MSys/MinGW.
+
+# Setup LibName          ZipFile                        BuildFile           BuildOptions
+
+# Tcl/Tk and stubs.
+Setup Tcl                Tcl-[GetTclVersion].7z         Tcl.bawt
+Setup TclStubs           Tcl-[GetTclVersion].7z         TclStubs.bawt
+Setup Tk                 Tk-[GetTkVersion].7z           Tk.bawt
+Setup TkStubs            Tk-[GetTkVersion].7z           TkStubs.bawt
+
+# Tclkit.
+Setup Tclkit             Tclkit-1.0.7z                  Tclkit.bawt

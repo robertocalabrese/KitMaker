@@ -1,0 +1,114 @@
+# Copyright: 2016-2023 Paul Obermeier (obermeier@tcl3d.org)
+# Distributed under BSD license.
+#
+# BuildType: MSys / gcc
+#
+# Changes to source code (see ReplaceLine below):
+# win/configure: Remove deletion of directory pkgs.
+# Otherwise sqlite and Co are not built.
+
+# This is a modified version of the original 'Tclkit.bawt' by Paul Obermeier.
+# The same license applys for the modifications.
+#
+# Developer:  🆁🅾🅱🅴🆁🆃🅾  🅲🅰🅻🅰🅱🆁🅴🆂🅴
+# City:       🅿🅰🅻🅴🆁🅼🅾, 🆂🅸🅲🅸🅻🆈
+# Country:    🅸🆃🅰🅻🆈
+
+proc Init_Tcl { libName libVersion } {
+    SetScriptAuthor    $libName "Paul Obermeier" "obermeier@tcl3d.org"
+    SetLibHomepage     $libName "http://www.tcl-lang.org/"
+    SetLibDependencies $libName "None"
+    SetPlatforms       $libName "All"
+    SetWinCompilers    $libName "gcc"
+}
+
+proc Env_Tcl { libName libVersion buildDir instDir devDir distDir } {
+    SetEnvVar    "TCLLIBPATH" "[file join $devDir [GetTclDir] lib]"
+    AddToPathEnv "[file join $devDir opt $libName bin]"
+}
+
+proc Build_Tcl { libName libVersion buildDir instDir devDir distDir } {
+    set buildDirMSys [MSysPath $buildDir]
+    set instDirMSys  [MSysPath $instDir]
+
+    if { [UseStage "Extract" $libName] } {
+        ExtractLibrary $libName $buildDir
+
+        ReplaceLine "$buildDir/win/configure" \
+                    "rm -Rf pkgs" \
+                    "# rm -Rf pkgs"
+
+        if { [GetMajor [GetLibVersion "Tcl"]] >= 8 && \
+             [GetMinor [GetLibVersion "Tcl"]] >= 7 } {
+            SingleFileCopy "[file join $buildDir libtommath tommath.h]" "[file join $buildDir generic]"
+        }
+    }
+
+    if { [UseStage "Configure" $libName] } {
+        set cmd ""
+        if { [IsWindows] && [Is32Bit] } {
+            append cmd "CFLAGS=-D_USE_32BIT_TIME_T "
+        }
+        if { [IsWindows] } {
+            append cmd "$buildDirMSys/win/configure "
+            append cmd "--build=[GetMingwVersion] "
+        } else {
+            append cmd "$buildDirMSys/unix/configure "
+        }
+        append cmd "--prefix=$instDirMSys --exec-prefix=$instDirMSys "
+        if { [Is64Bit] } {
+            append cmd "--enable-64bit "
+        }
+        if { [IsDebugBuild] } {
+            append cmd "--enable-symbols "
+        } else {
+            append cmd "--disable-symbols "
+        }
+        append cmd "--disable-zipfs "
+
+        if { [IsUnix] } {
+            exec chmod u+x "$buildDirMSys/unix/configure"
+        }
+
+        MSysRun $libName "${libName}_Configure" $buildDir "$cmd"
+    }
+
+    if { [UseStage "Compile" $libName] } {
+        MSysBuild $libName "$buildDir" "install"
+        # Install internal header files, too. Needed for Togl widget.
+        MSysBuild $libName "$buildDir" "install-private-headers"
+
+        set tclLib [GetTclLibName $libVersion]
+        if { [NeedDll2Lib $libName] } {
+            Dll2Lib $libName "[file join $instDir bin]" "[string cat $tclLib .dll]" "[string cat $tclLib .def]" "[string cat $tclLib .lib]"
+        }
+
+        SingleFileCopy "[file join $instDir bin [GetTclshName $libVersion]]" "[file join $instDir bin]" "tclsh[GetExeSuffix]"
+        if { [IsDebugBuild] } {
+            SingleFileCopy "[file join $instDir bin [GetTclshName $libVersion]]" "[file join $instDir bin]" "tclshg[GetExeSuffix]"
+        }
+    }
+
+    if { [UseStage "Distribute" $libName] } {
+        StripLibraries "$instDir"
+        if { [IsWindows] } {
+            MultiFileCopy "[file join $instDir bin]" "[file join $devDir  [GetTclBinDir]]" "*.exe *.dll"
+            MultiFileCopy "[file join $instDir bin]" "[file join $distDir [GetTclBinDir]]" "*.exe *.dll"
+            if { [UseWinCompiler $libName "vs"] || [NeedDll2Lib $libName] } {
+                MultiFileCopy "[file join $instDir bin]" "[file join $devDir  [GetTclLibDir]]" "*.lib"
+                MultiFileCopy "[file join $instDir bin]" "[file join $distDir [GetTclLibDir]]" "*.lib"
+            }
+        } else {
+            MultiFileCopy "[file join $instDir bin]" "[file join $devDir  [GetTclBinDir]]"
+            MultiFileCopy "[file join $instDir bin]" "[file join $distDir [GetTclBinDir]]"
+        }
+
+        MultiFileCopy "[file join $instDir include]" "[file join $devDir  [GetTclIncDir]]" "*" true
+        MultiFileCopy "[file join $instDir include]" "[file join $distDir [GetTclIncDir]]" "*" true
+
+        LibFileCopy "$instDir" "[file join $devDir  [GetTclDir]]" "*" true
+        LibFileCopy "$instDir" "[file join $distDir [GetTclDir]]" "*" true
+    }
+
+    return true
+}

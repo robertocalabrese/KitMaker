@@ -1,0 +1,50 @@
+# Copyright: 2016-2023 Paul Obermeier (obermeier@tcl3d.org)
+# Distributed under BSD license.
+#
+# BuildType Windows: nmake / vs
+
+proc Init_TkStubs { libName libVersion } {
+    SetScriptAuthor    $libName "Paul Obermeier" "obermeier@tcl3d.org"
+    SetLibHomepage     $libName "http://www.tcl-lang.org/"
+    SetLibDependencies $libName "TclStubs"
+    SetPlatforms       $libName "Windows"
+    SetWinCompilers    $libName "vs"
+
+    if { [UseVisualStudio "primary"] && [GetVisualStudioVersion] > 2013 } {
+        if { [VersionCompare "8.6.10" [GetLibVersion "Tcl"]] > 0 } {
+            # Tk versions older than 8.6.10 cannot be compiled with the newest SDK versions
+            # of Visual Studio greater than 2013, because of macro problems with winnt.h.
+            # See https://groups.google.com/forum/#!msg/comp.lang.tcl/2u1UopML7h0/UWA00xhCAAAJ
+            # If your VisualStudio version does not have the WinSDK version listed below, you can
+            # download it from https://developer.microsoft.com/en-us/windows/downloads/sdk-archive.
+            SetSdkVersion $libName "10.0.15063.0"
+        }
+    }
+}
+
+proc Build_TkStubs { libName libVersion buildDir instDir devDir distDir } {
+    if { [UseStage "Extract" $libName] } {
+        ExtractLibrary $libName $buildDir
+        # Do not interpret warnings as errors.
+        ReplaceKeywords "$buildDir/win/rules.vc" [list "-WX" "-WX-"]
+    }
+
+    if { [UseStage "Compile" $libName] } {
+        set opts ""
+        if { [IsDebugBuild] } {
+            append opts "OPTS=symbols,pdbs"
+        }
+        NMakeBuild $libName "$buildDir/win" "makefile.vc" "release" "TCLDIR=[GetOutputBuildDir]/TclStubs" {*}$opts
+        NMakeBuild $libName "$buildDir/win" "makefile.vc" "install" "INSTALLDIR=[GetOutputInstDir]/TclStubs" "TCLDIR=[GetOutputBuildDir]/TclStubs" {*}$opts
+    }
+
+    if { [UseStage "Distribute" $libName] } {
+        MultiFileCopy "[GetOutputInstDir]/TclStubs/lib" "$devDir/[GetTclLibDir]"  "tkstub*.lib"
+        MultiFileCopy "[GetOutputInstDir]/TclStubs/lib" "$distDir/[GetTclLibDir]" "tkstub*.lib"
+        if { [IsDebugBuild] } {
+            set tkStub "tkstub[GetMajorMinor $libVersion]"
+            SingleFileCopy "$devDir/[GetTclLibDir]/${tkStub}.lib" "$devDir/[GetTclLibDir]" "${tkStub}g.lib"
+        }
+    }
+    return true
+}
