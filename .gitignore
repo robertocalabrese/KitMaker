@@ -1,3 +1,6 @@
 # Ignore the following files:
 .DS_Store
 Thumbs.db
+
+# Ignore all the MSYS/MINGW compilers archives.
+assets/windows/gcc*.7z
