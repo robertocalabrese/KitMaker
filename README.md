@@ -254,6 +254,10 @@ There are various reasons for this choice, the two most important are:
 - It's a rolling release. This means that I can address problems that may arise as soon as they happens. And they will happen, it's the nature of the beast, updates may break dependancies.
 - It's my distro of choice either as a user or as a developer. I've been an Archlinux user for more than a decade and I never have been more pleased with any other distribution that I tried. In the end it's a matter of taste, I love using Archlinux and I love working on Archlinux. It has been a fantastic journey so far and I'm not ready or willing to jump down. Maybe one day I will feel the need to change Archlinux for some other distro (looking at you `NixOS` :wink:), but I will cross that bridge when, and if, I got there.
 
+## License
+
+[MIT](/LICENSE)
+
 &nbsp;
 
 [^1]: If you use KitMaker on any other distribution (not listed directly here), I would love to hear about so this section of the README can be updated.
