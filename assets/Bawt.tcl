@@ -2678,7 +2678,7 @@ namespace eval BawtBuild {
         if { $found } {
             set sBuildOpts(Tclkit,$libName,ResourceFile) [file normalize $fileName]
         } else {
-            ErrorAppend "SetTclkitResourceFile: Resource file $fileName not found. Using default icon file." "Warning"
+            ErrorAppend "SetTclkitResourceFile: Resource file $fileName not found. Using default resource file." "Warning"
         }
     }
 
