@@ -3997,10 +3997,10 @@ namespace eval BawtMain {
         SetCompilerVersions "gcc"
         SetStartTime
         SetSetupFile ""
-        AddIncludePath      [file join [GetInputRootDir] "Setup"] false
-        AddInputLibsDir     [file join [GetInputRootDir] "InputLibs"] false
-        AddInputLibsDir     [file join [pwd] "InputLibs"] false
-        SetInputResourceDir [file join [GetInputRootDir] "Resources"]
+        AddIncludePath      [file join [GetInputRootDir] "setup"] false
+        AddInputLibsDir     [file join [GetInputRootDir] "lib"] false
+        AddInputLibsDir     [file join [pwd] "lib"] false
+        SetInputResourceDir [file join [GetInputRootDir] "resources"]
         SetBawtUrl          "https://www.tcl3d.org/bawt/download"
 
         set sOpts(EnvVarPath) [list]
@@ -5121,7 +5121,7 @@ namespace eval BawtMain {
     }
 
     proc GetBootstrapDir {} {
-        return [file join [GetInputRootDir] "Bootstrap-[GetPlatformName]"]
+        return [file join [GetInputRootDir] [string tolower [GetPlatformName]]]
     }
 
     proc ExtractLibrary { libName targetDir } {
