@@ -1,0 +1,126 @@
+# Copyright: 2016-2023 Paul Obermeier (obermeier@tcl3d.org)
+# Distributed under BSD license.
+#
+# BuildType: MSys / gcc
+#
+# Possible user configuration options (--copt):
+#   Any -DXXX option usable for CFLAGS environment variable.
+#
+# Changes to source code (manual additions):
+# Versions 8.6.5 and 8.6.6 generic/tkImgPhoto.c:
+# Added patch for photo commands "read", "put" and "write",
+# which do not allow filenames or data starting with "-".
+# Applied bug fix for Mac (http://core.tcl-lang.org/tk/info/6cac4ac67e845927)
+
+# This is a modified version of the original 'Tclkit.bawt' by Paul Obermeier.
+# The same license applys for the modifications.
+#
+# Developer:  🆁🅾🅱🅴🆁🆃🅾  🅲🅰🅻🅰🅱🆁🅴🆂🅴
+# City:       🅿🅰🅻🅴🆁🅼🅾, 🆂🅸🅲🅸🅻🆈
+# Country:    🅸🆃🅰🅻🆈
+
+proc Init_Tk { libName libVersion } {
+    SetScriptAuthor    $libName "Paul Obermeier" "obermeier@tcl3d.org"
+    SetLibHomepage     $libName "http://www.tcl-lang.org/"
+    SetLibDependencies $libName "Tcl"
+    SetPlatforms       $libName "All"
+    SetWinCompilers    $libName "gcc"
+}
+
+proc Build_Tk { libName libVersion buildDir instDir devDir distDir } {
+    set buildDirMSys     [MSysPath $buildDir]
+    set instDirMSys      [MSysPath $instDir]
+    set rootBuildDirMSys [MSysPath [GetOutputBuildDir]]
+
+    if { [UseStage "Extract" $libName] } {
+        ExtractLibrary $libName $buildDir
+    }
+
+    if { [UseStage "Configure" $libName] } {
+        set cmd [GetUserCFlags $libName]
+        if { [IsWindows] && [UseWinCompiler $libName "gcc"] && [Is64Bit] } {
+            if { [IsGccCompilerNewer "8.1.0"] } {
+                if { [VersionCompare "8.6.11" $libVersion] > 0 } {
+                    # Tk versions older than 8.6.11 need the following for 64-bit builds
+                    # using MinGW gcc 11.2.0. Otherwise a linker error occurs:
+                    # relocation truncated to fit: R_X86_64_32S against `.text'
+                    append cmd "LDFLAGS='-Wl,--image-base -Wl,0x10000000' "
+                }
+            }
+        }
+        if { [IsWindows] } {
+            append cmd "$buildDirMSys/win/configure "
+            append cmd "--build=[GetMingwVersion] "
+        } else {
+            append cmd "$buildDirMSys/unix/configure "
+        }
+        append cmd "--prefix=$instDirMSys --exec-prefix=$instDirMSys "
+        append cmd "--with-tcl=$rootBuildDirMSys/Tcl "
+        if { [Is64Bit] } {
+            append cmd "--enable-64bit "
+        }
+        if { [IsDebugBuild] } {
+            append cmd "--enable-symbols "
+        } else {
+            append cmd "--disable-symbols "
+        }
+        if { [IsDarwin] } {
+            append cmd "--enable-aqua "
+        }
+        append cmd "--disable-zipfs "
+
+        if { [IsUnix] } {
+            exec chmod u+x "$buildDirMSys/unix/configure"
+        }
+
+        MSysRun $libName "${libName}_Configure" $buildDir "$cmd"
+    }
+
+    if { [UseStage "Compile" $libName] } {
+        MSysBuild $libName "$buildDir" "install"
+        # Install internal header files, too. Need for Togl widget.
+        MSysBuild $libName "$buildDir" "install-private-headers"
+
+        set tkLib [GetTkLibName $libVersion]
+        if { [NeedDll2Lib $libName] } {
+            Dll2Lib $libName "[file join $instDir bin]" [string cat $tkLib .dll] [string cat $tkLib .def] [string cat $tkLib .lib]
+        }
+
+        SingleFileCopy "[file join $instDir bin [GetWishName $libVersion]]" "[file join $instDir bin]" "wish[GetExeSuffix]"
+        if { [IsDebugBuild] } {
+            SingleFileCopy "[file join $instDir bin [GetWishName $libVersion]]" "[file join $instDir bin]" "wishg[GetExeSuffix]"
+            set tkDir [string cat tk [GetMajorMinor $libVersion .]]
+            if { [IsWindows] } {
+                SingleFileCopy "[file join $instDir lib [string cat $tkDir g] pkgIndex.tcl]" "[file join $instDir lib $tkDir]"
+            } elseif { [IsLinux] } {
+                if { [file isdirectory "[file join $instDir [string cat lib [GetBits true]] $tkDir]"] } {
+                    SingleFileCopy "[file join $instDir [string cat lib [GetBits true]] $tkDir pkgIndex.tcl]" "[file join $instDir lib $tkDir]"
+                }
+            } else {
+                SingleFileCopy "[file join $instDir lib $tkDir pkgIndex.tcl]" "[file join $instDir lib $tkDir]"
+            }
+        }
+    }
+
+    if { [UseStage "Distribute" $libName] } {
+        StripLibraries "$instDir"
+        if { [IsWindows] } {
+            MultiFileCopy "[file join $instDir bin]" "[file join $devDir  [GetTclBinDir]]" "*.exe *.dll"
+            MultiFileCopy "[file join $instDir bin]" "[file join $distDir [GetTclBinDir]]" "*.exe *.dll"
+            if { [UseWinCompiler $libName "vs"] || [NeedDll2Lib $libName] } {
+                MultiFileCopy "[file join $instDir bin]" "[file join $devDir  [GetTclLibDir]]" "*.lib"
+                MultiFileCopy "[file join $instDir bin]" "[file join $distDir [GetTclLibDir]]" "*.lib"
+            }
+        } else {
+            MultiFileCopy "[file join $instDir bin]" "[file join $devDir  [GetTclBinDir]]"
+            MultiFileCopy "[file join $instDir bin]" "[file join $distDir [GetTclBinDir]]"
+        }
+        MultiFileCopy "[file join $instDir include]" "[file join $devDir  [GetTclIncDir]]"  "*" true
+        MultiFileCopy "[file join $instDir include]" "[file join $distDir [GetTclIncDir]]" "*" true
+
+        LibFileCopy "[file join $instDir]" "[file join $devDir  [GetTclDir]]"  "*" true
+        LibFileCopy "[file join $instDir]" "[file join $distDir [GetTclDir]]" "*" true
+    }
+
+    return true
+}
